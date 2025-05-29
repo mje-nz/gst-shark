@@ -2,6 +2,10 @@
 
 # Ridgerun GstShark
 
+# Get full path of directory containing this script
+SCRIPT="$(readlink -f "$0")"
+SCRIPT_DIR="$(dirname "$SCRIPT")"
+
 # Display help message
 if [ $1 == "--help" ]
 then
@@ -185,7 +189,7 @@ do
 done
 
 # Create plots
-octave -qf ${PERSIST} ./gstshark-plot.m "${processing_tracer_list[@]}" "${SAVEFIG}" "${FORMAT}" "${LEGEND}"
+octave -qf ${PERSIST} ${SCRIPT_DIR}/gstshark-plot.m "${processing_tracer_list[@]}" "${SAVEFIG}" "${FORMAT}" "${LEGEND}"
 
 # Remove files
 rm -f datastream.log

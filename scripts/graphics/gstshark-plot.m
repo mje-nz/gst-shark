@@ -1,5 +1,8 @@
 #
 
+file_path = fileparts(mfilename('fullpath'));
+addpath(file_path);
+
 GSTSHARK_SAVEFIG = 0;
 GSTSHARK_SAVEFIG_FORMAT = 'pdf';
 GSTSHARK_LEGEND = 'northeast';

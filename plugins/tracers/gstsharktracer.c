@@ -129,6 +129,8 @@ gst_shark_tracer_class_init (GstSharkTracerClass * klass)
   GST_DEBUG_CATEGORY_INIT (gst_shark_debug, "sharktracer", 0,
       "base shark tracer");
 
+  klass->enable_ctf = TRUE;
+
   oclass->constructed = gst_shark_tracer_constructed;
   oclass->finalize = gst_shark_tracer_finalize;
 }
@@ -137,7 +139,6 @@ static void
 gst_shark_tracer_init (GstSharkTracer * self)
 {
   GstSharkTracerPrivate *priv = GST_SHARK_TRACER_PRIVATE (self);
-  gint prev_count = 0;
 
   priv->params = g_hash_table_new (g_str_hash, g_str_equal);
   priv->hooks = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
@@ -145,10 +146,6 @@ gst_shark_tracer_init (GstSharkTracer * self)
 
   gst_shark_tracer_fill_hooks (priv);
 
-  prev_count = g_atomic_int_add (&g_shark_tracer_refcount, 1);
-  if (prev_count == 0) {
-    gst_ctf_init ();
-  }
 }
 
 static void
@@ -229,8 +226,16 @@ gst_shark_tracer_fill_hooks (GstSharkTracerPrivate * priv)
 static void
 gst_shark_tracer_constructed (GObject * object)
 {
-
   GstSharkTracer *self = GST_SHARK_TRACER (object);
+  GstSharkTracerClass *klass = GST_SHARK_TRACER_GET_CLASS (self);
+  gint prev_count = 0;
+
+  if (klass->enable_ctf) {
+    prev_count = g_atomic_int_add (&g_shark_tracer_refcount, 1);
+    if (prev_count == 0) {
+      gst_ctf_init ();
+    }
+  }
 
   gst_shark_tracer_save_params (self);
 }
@@ -251,6 +256,7 @@ gst_shark_tracer_free_params (GstSharkTracerPrivate * priv)
 static void
 gst_shark_tracer_finalize (GObject * object)
 {
+  GstSharkTracerClass *klass = GST_SHARK_TRACER_GET_CLASS (object);
   GstSharkTracerPrivate *priv = GST_SHARK_TRACER_PRIVATE (object);
 
   gst_shark_tracer_free_params (priv);
@@ -260,8 +266,10 @@ gst_shark_tracer_finalize (GObject * object)
 
   G_OBJECT_CLASS (gst_shark_tracer_parent_class)->finalize (object);
 
-  if (g_atomic_int_dec_and_test (&g_shark_tracer_refcount)) {
-    gst_ctf_close ();
+  if (klass->enable_ctf) {
+    if (g_atomic_int_dec_and_test (&g_shark_tracer_refcount)) {
+      gst_ctf_close ();
+    }
   }
 }
 

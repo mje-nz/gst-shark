@@ -35,6 +35,8 @@ struct _GstPeriodicTracerClass
   gboolean (* timer_callback) (GstPeriodicTracer * tracer);
   void (* reset) (GstPeriodicTracer * tracer);
   void (* write_header) (GstPeriodicTracer * tracer);
+  void (* start_monitoring) (GstPeriodicTracer * tracer, GstPipeline *pipeline);
+  void (* stop_monitoring) (GstPeriodicTracer * tracer, GstPipeline *pipeline);
 };
 
 G_END_DECLS

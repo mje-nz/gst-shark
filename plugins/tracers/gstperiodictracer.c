@@ -32,6 +32,8 @@ static void reset_internal (GstPeriodicTracer * self);
 static gboolean callback_internal (gpointer * data);
 static void write_header_internal (GstPeriodicTracer * self);
 static gint set_period (GstPeriodicTracer * self);
+static void start_monitoring_internal (GstPeriodicTracer * self, GstPipeline *pipeline);
+static void stop_monitoring_internal (GstPeriodicTracer * self, GstPipeline *pipeline);
 
 #define GST_PERIODIC_TRACER_PRIVATE(o) \
   gst_periodic_tracer_get_instance_private(GST_PERIODIC_TRACER(o))
@@ -100,10 +102,12 @@ element_change_state_post (GstTracer * tracer, guint64 ts,
         GST_OBJECT_NAME (element));
     write_header_internal (self);
     reset_internal (self);
+    start_monitoring_internal (self, GST_PIPELINE(element));
     install_callback (self);
   } else if (transition == GST_STATE_CHANGE_PLAYING_TO_PAUSED) {
     GST_DEBUG_OBJECT (self, "Pipeline %s changed to paused",
         GST_OBJECT_NAME (element));
+    stop_monitoring_internal (self, GST_PIPELINE(element));
     remove_callback (self);
   }
 }
@@ -222,6 +226,39 @@ callback_internal (gpointer * data)
   g_return_val_if_fail (klass->timer_callback, FALSE);
 
   return klass->timer_callback (self);
+}
+
+
+static void
+start_monitoring_internal (GstPeriodicTracer * self, GstPipeline *pipeline)
+{
+  GstPeriodicTracerClass *klass;
+
+  g_return_if_fail (self);
+
+  klass = GST_PERIODIC_TRACER_GET_CLASS (self);
+
+  /* It is okay if subclass don't provide start_monitoring implementation */
+  if (klass->start_monitoring) {
+    GST_DEBUG_OBJECT (self, "Start pipeline monitoring");
+    klass->start_monitoring (self, pipeline);
+  }
+}
+
+static void
+stop_monitoring_internal (GstPeriodicTracer * self, GstPipeline *pipeline)
+{
+  GstPeriodicTracerClass *klass;
+
+  g_return_if_fail (self);
+
+  klass = GST_PERIODIC_TRACER_GET_CLASS (self);
+
+  /* It is okay if subclass don't provide stop_monitoring implementation */
+  if (klass->stop_monitoring) {
+    GST_DEBUG_OBJECT (self, "Stop pipeline monitoring");
+    klass->stop_monitoring (self, pipeline);
+  }
 }
 
 static gint

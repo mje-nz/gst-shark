@@ -32,6 +32,8 @@ G_DECLARE_DERIVABLE_TYPE (GstSharkTracer, gst_shark_tracer, GST_SHARK, TRACER, G
 struct _GstSharkTracerClass
 {
   GstTracerClass parent_class;
+
+  gboolean enable_ctf;
 };
 
 gboolean gst_shark_tracer_element_is_filtered (GstSharkTracer *self, const gchar *regex);

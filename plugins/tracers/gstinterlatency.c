@@ -74,6 +74,7 @@ static const gchar interlatency_metadata_event[] = "event {\n\
 \n";
 
 static void gst_interlatency_tracer_dispose (GObject * object);
+static void gst_interlatency_tracer_constructed (GObject *object);
 
 /* data helpers */
 
@@ -311,13 +312,13 @@ gst_interlatency_tracer_class_init (GstInterLatencyTracerClass * klass)
   /* *INDENT-ON* */
 
   oclass->dispose = gst_interlatency_tracer_dispose;
+  oclass->constructed = gst_interlatency_tracer_constructed;
 }
 
 static void
 gst_interlatency_tracer_init (GstInterLatencyTracer * self)
 {
   GstTracer *tracer = GST_TRACER (self);
-  gchar *metadata_event = NULL;
 
   /* In push mode, pre/post will be called before/after the peer chain
    * function has been called. For this reason, we only use -pre to avoid
@@ -340,13 +341,23 @@ gst_interlatency_tracer_init (GstInterLatencyTracer * self)
   gst_tracing_register_hook (tracer, "pad-push-event-pre",
       G_CALLBACK (do_push_event_pre));
 
-  metadata_event =
-      g_strdup_printf (interlatency_metadata_event, INTERLATENCY_EVENT_ID, 0);
-  add_metadata_event_struct (metadata_event);
-  g_free (metadata_event);
 }
 
 static void
 gst_interlatency_tracer_dispose (GObject * object)
 {
+}
+
+static void
+gst_interlatency_tracer_constructed (GObject *object)
+{
+  gchar *metadata_event = NULL;
+
+  /* chain up so parent constructed runs first (calls gst_ctf_init) */
+  G_OBJECT_CLASS (gst_interlatency_tracer_parent_class)->constructed (object);
+
+  metadata_event =
+      g_strdup_printf (interlatency_metadata_event, INTERLATENCY_EVENT_ID, 0);
+  add_metadata_event_struct (metadata_event);
+  g_free (metadata_event);
 }

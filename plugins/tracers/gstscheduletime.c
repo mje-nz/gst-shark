@@ -69,6 +69,7 @@ static void sched_time_compute (GstTracer * tracer, guint64 ts, GstPad * pad);
 static void do_push_buffer_list_pre (GstTracer * tracer, GstClockTime ts,
     GstPad * pad, GstBufferList * list);
 static void gst_scheduletime_tracer_finalize (GObject * obj);
+static void gst_scheduletime_tracer_constructed (GObject *object);
 
 static void
 key_destroy (gpointer pad)
@@ -156,6 +157,7 @@ gst_scheduletime_tracer_class_init (GstScheduletimeTracerClass * klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
 
+  gobject_class->constructed = gst_scheduletime_tracer_constructed;
   gobject_class->finalize = gst_scheduletime_tracer_finalize;
 
   tr_schedule = gst_tracer_record_new ("scheduletime.class",
@@ -173,7 +175,6 @@ static void
 gst_scheduletime_tracer_init (GstScheduletimeTracer * self)
 {
   GstSharkTracer *tracer = GST_SHARK_TRACER (self);
-  gchar *metadata_event = NULL;
 
   self->schedule_pads =
       g_hash_table_new_full (g_direct_hash, g_direct_equal, key_destroy,
@@ -187,6 +188,16 @@ gst_scheduletime_tracer_init (GstScheduletimeTracer * self)
 
   gst_shark_tracer_register_hook (tracer, "pad-pull-range-pre",
       G_CALLBACK (sched_time_compute));
+
+}
+
+static void
+gst_scheduletime_tracer_constructed (GObject *object)
+{
+  gchar *metadata_event = NULL;
+
+  /* chain up so parent constructed runs first (calls gst_ctf_init) */
+  G_OBJECT_CLASS (gst_scheduletime_tracer_parent_class)->constructed (object);
 
   metadata_event =
       g_strdup_printf (scheduling_metadata_event, SCHED_TIME_EVENT_ID, 0);

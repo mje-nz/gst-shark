@@ -977,7 +977,7 @@ do_print_scheduling_event (event_id id, gchar * elementname, guint64 time)
 }
 
 void
-do_print_queue_level_event (event_id id, const gchar * elementname,
+do_print_queue_level_event (event_id id, const gchar * bin_name, const gchar * elementname,
     guint32 bytes, guint32 max_bytes, guint32 buffers, guint32 max_buffers,
     guint64 time, guint64 max_time)
 {
@@ -987,7 +987,7 @@ do_print_queue_level_event (event_id id, const gchar * elementname,
   gsize event_size;
 
   event_size =
-      strlen (elementname) + 1 + 4 * sizeof (guint32) + 2 * sizeof (guint64) +
+      strlen (bin_name) + 1 + strlen (elementname) + 1 + 4 * sizeof (guint32) + 2 * sizeof (guint64) +
       CTF_HEADER_SIZE;
 
   if (event_exceeds_mem_size (event_size)) {
@@ -1002,6 +1002,8 @@ do_print_queue_level_event (event_id id, const gchar * elementname,
   /* Add CTF header */
   CTF_EVENT_WRITE_HEADER (id, event_mem);
   /* Add event payload */
+  /* Write bin name */
+  CTF_EVENT_WRITE_STRING (bin_name, event_mem);
   /* Write element name */
   CTF_EVENT_WRITE_STRING (elementname, event_mem);
 

@@ -46,7 +46,7 @@ static void do_queue_level_list (GstTracer * tracer, guint64 ts, GstPad * pad,
     GstBufferList * list);
 static gboolean is_queue (GstElement * element);
 static void gst_queue_level_tracer_constructed (GObject *object);
-  
+
 static GstTracerRecord *tr_qlevel;
 
 static const gchar queue_level_metadata_event[] = "event {\n\
@@ -54,6 +54,7 @@ static const gchar queue_level_metadata_event[] = "event {\n\
     id = %d;\n\
     stream_id = %d;\n\
     fields := struct {\n\
+        string bin;\n\
         string queue;\n\
         integer { size = 32; align = 8; signed = 0; encoding = none; base = 10; } size_bytes;\n\
         integer { size = 32; align = 8; signed = 0; encoding = none; base = 10; } max_size_bytes;\n \
@@ -87,6 +88,47 @@ get_parent_element (GstPad * pad)
   return element;
 }
 
+static gchar *
+get_parent_bin_name (GstElement * element)
+{
+  GstObject *object;
+  GString *path;
+  gchar *result;
+  GSList *bins = NULL;
+  GSList *iter;
+
+  if (!element)
+    return g_strdup ("");
+
+  object = GST_OBJECT_PARENT (element);
+
+  /* Traverse up the hierarchy collecting all bins (excluding pipelines) */
+  while (object) {
+    if (GST_IS_BIN (object) && !GST_IS_PIPELINE (object)) {
+      bins = g_slist_prepend (bins, object);
+    }
+    object = GST_OBJECT_PARENT (object);
+  }
+
+  if (!bins) {
+    return g_strdup ("");
+  }
+
+  /* Build the path string */
+  path = g_string_new (NULL);
+  for (iter = bins; iter != NULL; iter = iter->next) {
+    if (path->len > 0) {
+      g_string_append_c (path, '/');
+    }
+    g_string_append (path, GST_OBJECT_NAME (iter->data));
+  }
+
+  g_slist_free (bins);
+  result = g_string_free (path, FALSE);
+
+  return result;
+}
+
 static void
 do_queue_level (GstTracer * self, guint64 ts, GstPad * pad)
 {
@@ -100,6 +142,7 @@ do_queue_level (GstTracer * self, guint64 ts, GstPad * pad)
   gchar *size_time_string;
   gchar *max_size_time_string;
   const gchar *element_name;
+  gchar *bin_name;
 
   element = get_parent_element (pad);
 
@@ -108,6 +151,7 @@ do_queue_level (GstTracer * self, guint64 ts, GstPad * pad)
   }
 
   element_name = GST_OBJECT_NAME (element);
+  bin_name = get_parent_bin_name (element);
 
   g_object_get (element, "current-level-bytes", &size_bytes,
       "current-level-buffers", &size_buffers,
@@ -122,14 +166,16 @@ do_queue_level (GstTracer * self, guint64 ts, GstPad * pad)
   max_size_time_string =
       g_strdup_printf ("%" GST_TIME_FORMAT, GST_TIME_ARGS (max_size_time));
 
-  gst_tracer_record_log (tr_qlevel, element_name, size_bytes, max_size_bytes,
+  gst_tracer_record_log (tr_qlevel, bin_name, element_name, size_bytes, max_size_bytes,
       size_buffers, max_size_buffers, size_time_string, max_size_time_string);
 
   g_free (size_time_string);
   g_free (max_size_time_string);
 
-  do_print_queue_level_event (QUEUE_LEVEL_EVENT_ID, element_name, size_bytes,
+  do_print_queue_level_event (QUEUE_LEVEL_EVENT_ID, bin_name, element_name, size_bytes,
       max_size_bytes, size_buffers, max_size_buffers, size_time, max_size_time);
+
+  g_free (bin_name);
 
 out:
   {
@@ -174,7 +220,11 @@ gst_queue_level_tracer_class_init (GstQueueLevelTracerClass * klass)
   GObjectClass *oclass = G_OBJECT_CLASS (klass);
   oclass->constructed = gst_queue_level_tracer_constructed;
 
-  tr_qlevel = gst_tracer_record_new ("queuelevel.class", "queue",
+  tr_qlevel = gst_tracer_record_new ("queuelevel.class", "bin",
+      GST_TYPE_STRUCTURE, gst_structure_new ("scope",
+          "type", G_TYPE_GTYPE, G_TYPE_STRING,
+          "related-to", GST_TYPE_TRACER_VALUE_SCOPE,
+          GST_TRACER_VALUE_SCOPE_ELEMENT, NULL), "queue",
       GST_TYPE_STRUCTURE, gst_structure_new ("scope",
           "type", G_TYPE_GTYPE, G_TYPE_STRING,
           "related-to", GST_TYPE_TRACER_VALUE_SCOPE,

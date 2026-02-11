@@ -803,14 +803,14 @@ do_print_cpuusage_event (event_id id, guint32 cpu_num, gfloat * cpuload)
 }
 
 void
-do_print_proctime_event (event_id id, gchar * elementname, guint64 time)
+do_print_proctime_event (event_id id, const gchar * bin_name, gchar * elementname, guint64 time)
 {
   GError *error;
   guint8 *mem;
   guint8 *event_mem;
   gsize event_size;
 
-  event_size = strlen (elementname) + 1 + sizeof (time) + CTF_HEADER_SIZE;
+  event_size = strlen (bin_name) + 1 + strlen (elementname) + 1 + sizeof (time) + CTF_HEADER_SIZE;
 
   if (event_exceeds_mem_size (event_size)) {
     return;
@@ -823,13 +823,15 @@ do_print_proctime_event (event_id id, gchar * elementname, guint64 time)
   g_mutex_lock (&ctf_descriptor->mutex);
   /* Add CTF header */
   CTF_EVENT_WRITE_HEADER (id, event_mem);
+  /* Write bin name */
+  CTF_EVENT_WRITE_STRING (bin_name, event_mem);
   /* Write element name */
   CTF_EVENT_WRITE_STRING (elementname, event_mem);
   /* Write time */
   CTF_EVENT_WRITE_INT64 (time, event_mem);
 
   if (FALSE == ctf_descriptor->file_output_disable) {
-    event_mem -= event_size;
+    event_mem = mem + TCP_HEADER_SIZE;
     fwrite (event_mem, sizeof (gchar), event_size, ctf_descriptor->datastream);
   }
 
@@ -845,14 +847,14 @@ do_print_proctime_event (event_id id, gchar * elementname, guint64 time)
 }
 
 void
-do_print_framerate_event (event_id id, gchar * elementname, guint64 fps)
+do_print_framerate_event (event_id id, const gchar * bin_name, gchar * elementname, guint64 fps)
 {
   GError *error;
   guint8 *mem;
   guint8 *event_mem;
   gsize event_size;
 
-  event_size = strlen (elementname) + 1 + sizeof (guint64) + CTF_HEADER_SIZE;
+  event_size = strlen (bin_name) + 1 + strlen (elementname) + 1 + sizeof (guint64) + CTF_HEADER_SIZE;
 
   if (event_exceeds_mem_size (event_size)) {
     return;
@@ -865,6 +867,8 @@ do_print_framerate_event (event_id id, gchar * elementname, guint64 fps)
   g_mutex_lock (&ctf_descriptor->mutex);
   /* Add CTF header */
   CTF_EVENT_WRITE_HEADER (id, event_mem);
+  /* Write bin name */
+  CTF_EVENT_WRITE_STRING (bin_name, event_mem);
   /* Write element name */
   CTF_EVENT_WRITE_STRING (elementname, event_mem);
   /* Write fps */
@@ -888,7 +892,7 @@ do_print_framerate_event (event_id id, gchar * elementname, guint64 fps)
 
 void
 do_print_interlatency_event (event_id id,
-    gchar * originpad, gchar * destinationpad, guint64 time)
+    const gchar * from_bin, gchar * originpad, const gchar * to_bin, gchar * destinationpad, guint64 time)
 {
   GError *error;
   guint8 *mem;
@@ -896,7 +900,7 @@ do_print_interlatency_event (event_id id,
   gsize event_size;
 
   event_size =
-      strlen (originpad) + 1 + strlen (destinationpad) + 1 + sizeof (guint64) +
+      strlen (from_bin) + 1 + strlen (originpad) + 1 + strlen (to_bin) + 1 + strlen (destinationpad) + 1 + sizeof (guint64) +
       CTF_HEADER_SIZE;
 
   if (event_exceeds_mem_size (event_size)) {
@@ -911,8 +915,12 @@ do_print_interlatency_event (event_id id,
   /* Add CTF header */
   CTF_EVENT_WRITE_HEADER (id, event_mem);
   /* Add event payload */
+  /* Write from bin name */
+  CTF_EVENT_WRITE_STRING (from_bin, event_mem);
   /* Write origin pad name */
   CTF_EVENT_WRITE_STRING (originpad, event_mem);
+  /* Write to bin name */
+  CTF_EVENT_WRITE_STRING (to_bin, event_mem);
   /* Write destination pad name */
   CTF_EVENT_WRITE_STRING (destinationpad, event_mem);
   /* Write time */
@@ -1042,14 +1050,14 @@ do_print_queue_level_event (event_id id, const gchar * bin_name, const gchar * e
 }
 
 void
-do_print_bitrate_event (event_id id, gchar * elementname, guint64 bps)
+do_print_bitrate_event (event_id id, const gchar * bin_name, gchar * elementname, guint64 bps)
 {
   GError *error;
   guint8 *mem;
   guint8 *event_mem;
   gsize event_size;
 
-  event_size = strlen (elementname) + 1 + sizeof (bps) + CTF_HEADER_SIZE;
+  event_size = strlen (bin_name) + 1 + strlen (elementname) + 1 + sizeof (bps) + CTF_HEADER_SIZE;
 
   if (event_exceeds_mem_size (event_size)) {
     return;
@@ -1062,6 +1070,8 @@ do_print_bitrate_event (event_id id, gchar * elementname, guint64 bps)
   g_mutex_lock (&ctf_descriptor->mutex);
   /* Add CTF header */
   CTF_EVENT_WRITE_HEADER (id, event_mem);
+  /* Write bin name */
+  CTF_EVENT_WRITE_STRING (bin_name, event_mem);
   /* Write element name */
   CTF_EVENT_WRITE_STRING (elementname, event_mem);
   /* Write bitrate */
@@ -1084,7 +1094,7 @@ do_print_bitrate_event (event_id id, gchar * elementname, guint64 bps)
 }
 
 void
-do_print_buffer_event (event_id id, const gchar * pad, GstClockTime pts,
+do_print_buffer_event (event_id id, const gchar * bin_name, const gchar * pad, GstClockTime pts,
     GstClockTime dts, GstClockTime duration, guint64 offset,
     guint64 offset_end, guint64 size, GstBufferFlags flags, guint32 refcount)
 {
@@ -1094,7 +1104,7 @@ do_print_buffer_event (event_id id, const gchar * pad, GstClockTime pts,
   gsize event_size;
 
   event_size =
-      strlen (pad) + 1 + 6 * sizeof (guint64) + 2 * sizeof (guint32) +
+      strlen (bin_name) + 1 + strlen (pad) + 1 + 6 * sizeof (guint64) + 2 * sizeof (guint32) +
       CTF_HEADER_SIZE;
 
   if (event_exceeds_mem_size (event_size)) {
@@ -1110,6 +1120,7 @@ do_print_buffer_event (event_id id, const gchar * pad, GstClockTime pts,
   CTF_EVENT_WRITE_HEADER (id, event_mem);
 
   /* Write event specific fields */
+  CTF_EVENT_WRITE_STRING (bin_name, event_mem);
   CTF_EVENT_WRITE_STRING (pad, event_mem);
   CTF_EVENT_WRITE_INT64 (pts, event_mem);
   CTF_EVENT_WRITE_INT64 (dts, event_mem);

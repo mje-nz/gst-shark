@@ -7,12 +7,12 @@
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
- * 
+ *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
@@ -23,12 +23,13 @@
  * @short_description: shows the framerate on every pad in the pipeline.
  *
  * A tracing module that displays the amount of frames per second on every
- * SRC or SINK pad of every element of the running pipeline, depending on 
+ * SRC or SINK pad of every element of the running pipeline, depending on
  * the scheduling mode.
  */
 
 #include "gstframerate.h"
 #include "gstctf.h"
+#include "gstsharkhelpers.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_framerate_debug);
 #define GST_CAT_DEFAULT gst_framerate_debug
@@ -71,6 +72,7 @@ typedef struct _GstFramerateHash GstFramerateHash;
 
 struct _GstFramerateHash
 {
+  gchar *bin_name;
   gchar *fullname;
   guint counter;
 };
@@ -80,6 +82,7 @@ static const gchar framerate_metadata_event[] = "event {\n\
     id = %d;\n\
     stream_id = %d;\n\
     fields := struct {\n\
+        string bin;\n\
         string pad;\n\
         integer { size = 64; align = 8; signed = 0; encoding = none; base = 10; } _fps;\n\
     };\n\
@@ -99,6 +102,10 @@ gst_framerate_tracer_class_init (GstFramerateTracerClass * klass)
   gobject_class->finalize = gst_framerate_tracer_finalize;
 
   tr_framerate = gst_tracer_record_new ("framerate.class",
+      "bin", GST_TYPE_STRUCTURE, gst_structure_new ("scope",
+          "type", G_TYPE_GTYPE, G_TYPE_STRING,
+          "related-to", GST_TYPE_TRACER_VALUE_SCOPE,
+          GST_TRACER_VALUE_SCOPE_ELEMENT, NULL),
       "pad", GST_TYPE_STRUCTURE, gst_structure_new ("scope",
           "type", G_TYPE_GTYPE, G_TYPE_STRING,
           "related-to", GST_TYPE_TRACER_VALUE_SCOPE, GST_TRACER_VALUE_SCOPE_PAD,
@@ -175,15 +182,15 @@ print_framerate (GstPeriodicTracer * tracer)
   /* Lock the tracer to make sure no new pad is added while we are logging */
   GST_OBJECT_LOCK (self);
 
-  /* Using the iterator functions to go through the Hash table and print the framerate 
+  /* Using the iterator functions to go through the Hash table and print the framerate
      of every element stored */
   g_hash_table_iter_init (&iter, self->frame_counters);
   while (g_hash_table_iter_next (&iter, &key, &value)) {
     pad_table = (GstFramerateHash *) value;
 
-    gst_tracer_record_log (tr_framerate, pad_table->fullname,
+    gst_tracer_record_log (tr_framerate, pad_table->bin_name, pad_table->fullname,
         pad_table->counter);
-    do_print_framerate_event (FPS_EVENT_ID, pad_table->fullname,
+    do_print_framerate_event (FPS_EVENT_ID, pad_table->bin_name, pad_table->fullname,
         pad_table->counter);
     pad_table->counter = 0;
   }
@@ -214,6 +221,8 @@ consider_frames (GstFramerateTracer * self, GstPad * pad, guint amount)
 {
   GstFramerateHash *pad_frames;
   gchar *fullname;
+  gchar *bin_name;
+  GstElement *element;
 
   g_return_if_fail (self);
   g_return_if_fail (pad);
@@ -225,12 +234,15 @@ consider_frames (GstFramerateTracer * self, GstPad * pad, guint amount)
     pad_frames->counter += amount;
   } else {
 
-    /* The full name of every pad has the format elementName_padName and it is going 
+    /* The full name of every pad has the format elementName_padName and it is going
        to be used for displaying the framerate in a friendly user way */
+    element = gst_shark_get_parent_element (pad);
+    bin_name = gst_shark_get_parent_bin_name (element);
     fullname = g_strdup_printf ("%s_%s", GST_DEBUG_PAD_NAME (pad));
     fullname = make_char_array_valid (fullname);
 
     pad_frames = g_malloc (sizeof (GstFramerateHash));
+    pad_frames->bin_name = bin_name;
     pad_frames->fullname = fullname;
     pad_frames->counter = amount;
 
@@ -240,6 +252,7 @@ consider_frames (GstFramerateTracer * self, GstPad * pad, guint amount)
     GST_OBJECT_UNLOCK (self);
 
     GST_INFO_OBJECT (self, "The %s key was added to the Hash Table", fullname);
+    gst_object_unref (element);
   }
 }
 
@@ -273,6 +286,7 @@ destroy_hashtable_value (gpointer data)
      it is needed to free the memory of the structure in every value */
   value = (GstFramerateHash *) data;
 
+  g_free (value->bin_name);
   g_free (value->fullname);
   g_free (value);
 }

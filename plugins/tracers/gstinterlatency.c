@@ -43,6 +43,7 @@
 
 #include "gstinterlatency.h"
 #include "gstctf.h"
+#include "gstsharkhelpers.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_interlatency_debug);
 #define GST_CAT_DEFAULT gst_interlatency_debug
@@ -66,7 +67,9 @@ static const gchar interlatency_metadata_event[] = "event {\n\
     id = %d;\n\
     stream_id = %d;\n\
     fields := struct {\n\
+        string from_bin;\n\
         string from_pad;\n\
+        string to_bin;\n\
         string to_pad;\n\
         integer { size = 64; align = 8; signed = 0; encoding = none; base = 10; } _time;\n\
     };\n\
@@ -119,14 +122,22 @@ log_latency (GstInterLatencyTracer * interlatency_tracer,
     const GstStructure * data, GstPad * sink_pad, guint64 sink_ts)
 {
   GstPad *src_pad = NULL;
+  GstElement *src_element = NULL;
+  GstElement *sink_element = NULL;
   guint64 src_ts;
   gchar *src = NULL, *sink = NULL;
+  gchar *src_bin = NULL, *sink_bin = NULL;
   guint64 time;
   GString *time_string = NULL;
 
   gst_structure_id_get (data,
       latency_probe_pad, GST_TYPE_PAD, &src_pad,
       latency_probe_ts, G_TYPE_UINT64, &src_ts, NULL);
+
+  src_element = get_real_pad_parent (src_pad);
+  sink_element = get_real_pad_parent (sink_pad);
+  src_bin = gst_shark_get_parent_bin_name (src_element);
+  sink_bin = gst_shark_get_parent_bin_name (sink_element);
 
   src = g_strdup_printf ("%s_%s", GST_DEBUG_PAD_NAME (src_pad));
   sink = g_strdup_printf ("%s_%s", GST_DEBUG_PAD_NAME (sink_pad));
@@ -137,7 +148,7 @@ log_latency (GstInterLatencyTracer * interlatency_tracer,
   g_string_printf (time_string, "%" GST_TIME_FORMAT, GST_TIME_ARGS (time));
 
 #ifdef GST_STABLE_RELEASE
-  gst_tracer_record_log (tr_interlatency, src, sink, time_string->str);
+  gst_tracer_record_log (tr_interlatency, src_bin, src, sink_bin, sink, time_string->str);
 #else
   /* TODO(ensonic): report format is still unstable */
   gst_tracer_log_trace (gst_structure_new ("interlatency",
@@ -145,11 +156,13 @@ log_latency (GstInterLatencyTracer * interlatency_tracer,
           "to_pad", G_TYPE_STRING, sink,
           "time", G_TYPE_STRING, time_string->str, NULL));
 #endif
-  do_print_interlatency_event (INTERLATENCY_EVENT_ID, src, sink, time);
+  do_print_interlatency_event (INTERLATENCY_EVENT_ID, src_bin, src, sink_bin, sink, time);
 
   g_string_free (time_string, TRUE);
   g_free (src);
   g_free (sink);
+  g_free (src_bin);
+  g_free (sink_bin);
 }
 
 static void
@@ -283,10 +296,18 @@ gst_interlatency_tracer_class_init (GstInterLatencyTracerClass * klass)
   /* *INDENT-OFF* */
 #ifdef GST_STABLE_RELEASE
   tr_interlatency = gst_tracer_record_new ("interlatency.class",
+      "from_bin", GST_TYPE_STRUCTURE, gst_structure_new ("scope",
+          "type", G_TYPE_GTYPE, G_TYPE_STRING,
+          "related-to", GST_TYPE_TRACER_VALUE_SCOPE,
+          GST_TRACER_VALUE_SCOPE_ELEMENT, NULL),
       "from_pad", GST_TYPE_STRUCTURE, gst_structure_new ("scope",
           "type", G_TYPE_GTYPE, G_TYPE_STRING,
           "related-to", GST_TYPE_TRACER_VALUE_SCOPE, GST_TRACER_VALUE_SCOPE_PAD,
           NULL),
+      "to_bin", GST_TYPE_STRUCTURE, gst_structure_new ("scope",
+          "type", G_TYPE_GTYPE, G_TYPE_STRING,
+          "related-to", GST_TYPE_TRACER_VALUE_SCOPE,
+          GST_TRACER_VALUE_SCOPE_ELEMENT, NULL),
       "to_pad", GST_TYPE_STRUCTURE, gst_structure_new ("scope",
           "type", G_TYPE_GTYPE, G_TYPE_STRING,
           "related-to", GST_TYPE_TRACER_VALUE_SCOPE, GST_TRACER_VALUE_SCOPE_PAD,

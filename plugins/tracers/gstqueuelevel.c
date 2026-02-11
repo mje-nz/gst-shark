@@ -26,6 +26,7 @@
 
 #include "gstqueuelevel.h"
 #include "gstctf.h"
+#include "gstsharkhelpers.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_queue_level_debug);
 #define GST_CAT_DEFAULT gst_queue_level_debug
@@ -66,69 +67,6 @@ static const gchar queue_level_metadata_event[] = "event {\n\
 };\n\
 \n";
 
-static GstElement *
-get_parent_element (GstPad * pad)
-{
-  GstElement *element;
-  GstObject *parent;
-  GstObject *child = GST_OBJECT (pad);
-
-  do {
-    parent = GST_OBJECT_PARENT (child);
-
-    if (GST_IS_ELEMENT (parent))
-      break;
-
-    child = parent;
-
-  } while (GST_IS_OBJECT (child));
-
-  element = gst_pad_get_parent_element (GST_PAD (child));
-
-  return element;
-}
-
-static gchar *
-get_parent_bin_name (GstElement * element)
-{
-  GstObject *object;
-  GString *path;
-  gchar *result;
-  GSList *bins = NULL;
-  GSList *iter;
-
-  if (!element)
-    return g_strdup ("");
-
-  object = GST_OBJECT_PARENT (element);
-
-  /* Traverse up the hierarchy collecting all bins (excluding pipelines) */
-  while (object) {
-    if (GST_IS_BIN (object) && !GST_IS_PIPELINE (object)) {
-      bins = g_slist_prepend (bins, object);
-    }
-    object = GST_OBJECT_PARENT (object);
-  }
-
-  if (!bins) {
-    return g_strdup ("");
-  }
-
-  /* Build the path string */
-  path = g_string_new (NULL);
-  for (iter = bins; iter != NULL; iter = iter->next) {
-    if (path->len > 0) {
-      g_string_append_c (path, '/');
-    }
-    g_string_append (path, GST_OBJECT_NAME (iter->data));
-  }
-
-  g_slist_free (bins);
-  result = g_string_free (path, FALSE);
-
-  return result;
-}
-
 static void
 do_queue_level (GstTracer * self, guint64 ts, GstPad * pad)
 {
@@ -144,14 +82,14 @@ do_queue_level (GstTracer * self, guint64 ts, GstPad * pad)
   const gchar *element_name;
   gchar *bin_name;
 
-  element = get_parent_element (pad);
+  element = gst_shark_get_parent_element (pad);
 
   if (!is_queue (element)) {
     goto out;
   }
 
   element_name = GST_OBJECT_NAME (element);
-  bin_name = get_parent_bin_name (element);
+  bin_name = gst_shark_get_parent_bin_name (element);
 
   g_object_get (element, "current-level-bytes", &size_bytes,
       "current-level-buffers", &size_buffers,

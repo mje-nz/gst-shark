@@ -6,7 +6,8 @@ libgst_shark_src_files = [
   'gstctf.c',
   'gstparser.c',
   'gstsharktracer.c',
-  'gstperiodictracer.c'
+  'gstperiodictracer.c',
+  'gstsharkhelpers.c',
 ]
 
 libgst_shark_c_args = [gst_c_args,
@@ -31,6 +32,7 @@ install_headers(
   [
     'gstsharktracer.h',
     'gstperiodictracer.h',
+    'gstsharkhelpers.h',
   ],
   subdir : join_paths('gst', 'shark')
 )

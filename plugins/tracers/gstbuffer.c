@@ -26,6 +26,7 @@
 
 #include "gstbuffer.h"
 #include "gstctf.h"
+#include "gstsharkhelpers.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_buffer_debug);
 #define GST_CAT_DEFAULT gst_buffer_debug
@@ -55,6 +56,7 @@ static const gchar buffer_metadata_event[] = "event {\n\
     id = %d;\n\
     stream_id = %d;\n\
     fields := struct {\n\
+        string bin;\n\
         string pad;\n\
         integer { size = 64; align = 8; signed = 0; encoding = none; base = 10; } pts;\n\
         integer { size = 64; align = 8; signed = 0; encoding = none; base = 10; } dts;\n\
@@ -73,6 +75,8 @@ gst_buffer_buffer_pre (GObject * self, GstClockTime ts, GstPad * pad,
     GstBuffer * buffer)
 {
   gchar *pad_name;
+  gchar *bin_name;
+  GstElement *element;
   GstClockTime pts;
   gchar *spts;
   GstClockTime dts;
@@ -87,6 +91,8 @@ gst_buffer_buffer_pre (GObject * self, GstClockTime ts, GstPad * pad,
   gchar *sflags;
   guint refcount;
 
+  element = gst_shark_get_parent_element (pad);
+  bin_name = gst_shark_get_parent_bin_name (element);
   pad_name = g_strdup_printf ("%s:%s", GST_DEBUG_PAD_NAME (pad));
 
   pts = GST_BUFFER_PTS (buffer);
@@ -110,10 +116,10 @@ gst_buffer_buffer_pre (GObject * self, GstClockTime ts, GstPad * pad,
 
   refcount = GST_MINI_OBJECT_REFCOUNT_VALUE (buffer);
 
-  gst_tracer_record_log (tr_buffer, pad_name, spts, sdts, sduration, offset,
+  gst_tracer_record_log (tr_buffer, bin_name, pad_name, spts, sdts, sduration, offset,
       offset_end, size, sflags, refcount);
 
-  do_print_buffer_event (BUFFER_EVENT_ID, pad_name, pts, dts, duration,
+  do_print_buffer_event (BUFFER_EVENT_ID, bin_name, pad_name, pts, dts, duration,
       offset, offset_end, size, flags, refcount);
 
   g_value_unset (&vflags);
@@ -122,6 +128,8 @@ gst_buffer_buffer_pre (GObject * self, GstClockTime ts, GstPad * pad,
   g_free (sduration);
   g_free (sflags);
   g_free (pad_name);
+  g_free (bin_name);
+  gst_object_unref (element);
 }
 
 static void
@@ -149,6 +157,10 @@ static void
 gst_buffer_tracer_class_init (GstBufferTracerClass * klass)
 {
   tr_buffer = gst_tracer_record_new ("buffer.class",
+      "bin", GST_TYPE_STRUCTURE, gst_structure_new ("scope",
+          "type", G_TYPE_GTYPE, G_TYPE_STRING,
+          "related-to", GST_TYPE_TRACER_VALUE_SCOPE,
+          GST_TRACER_VALUE_SCOPE_ELEMENT, NULL),
       "pad", GST_TYPE_STRUCTURE, gst_structure_new ("value",
           "type", G_TYPE_GTYPE, G_TYPE_STRING,
           "description", G_TYPE_STRING,

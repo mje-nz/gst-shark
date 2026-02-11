@@ -27,6 +27,7 @@
 #include "gstproctimecompute.h"
 #include "gstproctime.h"
 #include "gstctf.h"
+#include "gstsharkhelpers.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_proc_time_debug);
 #define GST_CAT_DEFAULT gst_proc_time_debug
@@ -58,6 +59,7 @@ static const gchar proc_time_metadata_event[] = "event {\n\
     id = %d;\n\
     stream_id = %d;\n\
     fields := struct {\n\
+        string bin;\n\
         string element; \n\
         integer { size = 64; align = 8; signed = 0; encoding = none; base = 10; } _time;\n\
     };\n\
@@ -72,7 +74,9 @@ do_push_buffer_pre (GstTracer * self, guint64 ts, GstPad * pad)
   GstProcTime *proc_time;
 
   GstPad *pad_peer;
+  GstElement *element;
   gchar *name;
+  gchar *bin_name;
   GstClockTime time;
   gchar *time_string;
   gboolean should_log;
@@ -81,7 +85,9 @@ do_push_buffer_pre (GstTracer * self, guint64 ts, GstPad * pad)
   proc_time_tracer = GST_PROC_TIME_TRACER (self);
   shark_tracer = GST_SHARK_TRACER (proc_time_tracer);
   proc_time = proc_time_tracer->proc_time;
-  name = GST_OBJECT_NAME (GST_OBJECT_PARENT (pad));
+  element = gst_shark_get_parent_element (pad);
+  bin_name = gst_shark_get_parent_bin_name (element);
+  name = GST_OBJECT_NAME (element);
 
   pad_peer = gst_pad_get_peer (pad);
   if (!pad_peer) {
@@ -96,13 +102,15 @@ do_push_buffer_pre (GstTracer * self, guint64 ts, GstPad * pad)
   if (should_log) {
     time_string = g_strdup_printf ("%" GST_TIME_FORMAT, GST_TIME_ARGS (time));
 
-    gst_tracer_record_log (tr_proc_time, name, time_string);
+    gst_tracer_record_log (tr_proc_time, bin_name, name, time_string);
 
-    do_print_proctime_event (PROCTIME_EVENT_ID, name, time);
+    do_print_proctime_event (PROCTIME_EVENT_ID, bin_name, name, time);
 
     g_free (time_string);
   }
 
+  g_free (bin_name);
+  gst_object_unref (element);
   gst_object_unref (pad_peer);
 }
 
@@ -142,6 +150,10 @@ gst_proc_time_tracer_class_init (GstProcTimeTracerClass * klass)
   gobject_class->finalize = gst_proc_time_tracer_finalize;
 
   tr_proc_time = gst_tracer_record_new ("proctime.class",
+      "bin", GST_TYPE_STRUCTURE, gst_structure_new ("scope",
+          "type", G_TYPE_GTYPE, G_TYPE_STRING,
+          "related-to", GST_TYPE_TRACER_VALUE_SCOPE,
+          GST_TRACER_VALUE_SCOPE_ELEMENT, NULL),
       "element", GST_TYPE_STRUCTURE, gst_structure_new ("scope",
           "type", G_TYPE_GTYPE, G_TYPE_STRING,
           "related-to", GST_TYPE_TRACER_VALUE_SCOPE,

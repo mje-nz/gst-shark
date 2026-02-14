@@ -23,21 +23,25 @@
 GstElement *
 gst_shark_get_parent_element (GstPad * pad)
 {
-  GstElement *element;
+  GstElement *element = NULL;
   GstObject *parent;
   GstObject *child = GST_OBJECT (pad);
 
   do {
     parent = GST_OBJECT_PARENT (child);
 
-    if (GST_IS_ELEMENT (parent))
+    if (!parent)
       break;
+
+    if (GST_IS_ELEMENT (parent)) {
+      element = GST_ELEMENT (parent);
+      gst_object_ref (element);
+      break;
+    }
 
     child = parent;
 
   } while (GST_IS_OBJECT (child));
-
-  element = gst_pad_get_parent_element (GST_PAD (child));
 
   return element;
 }

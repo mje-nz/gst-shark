@@ -85,7 +85,13 @@ do_push_buffer_pre (GstTracer * self, guint64 ts, GstPad * pad)
   proc_time_tracer = GST_PROC_TIME_TRACER (self);
   shark_tracer = GST_SHARK_TRACER (proc_time_tracer);
   proc_time = proc_time_tracer->proc_time;
+  if (!GST_IS_PAD (pad)) {
+    return;
+  }
   element = gst_shark_get_parent_element (pad);
+  if (!element) {
+    return;
+  }
   bin_name = gst_shark_get_parent_bin_name (element);
   name = GST_OBJECT_NAME (element);
 
